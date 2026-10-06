@@ -56,7 +56,7 @@ func testCatalog() {
 
     let singleImage = ActionCatalog.actions(
         for: [url("photo.png")],
-        onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }
+        onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }, onSizePanel: { _ in }
     )
     let ids = singleImage.map(\.id)
     Check.that(ids.contains("edit-image"), "目录:单图有编辑入口")
@@ -70,25 +70,25 @@ func testCatalog() {
 
     let multipleImages = ActionCatalog.actions(
         for: [url("a.png"), url("b.png"), url("c.png")],
-        onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }
+        onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }, onSizePanel: { _ in }
     )
     Check.that(!multipleImages.map(\.id).contains("edit-image"), "目录:多图无单图编辑入口")
 
     let singlePDF = ActionCatalog.actions(
         for: [url("a.pdf")],
-        onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }
+        onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }, onSizePanel: { _ in }
     )
     Check.that(!singlePDF.map(\.id).contains("merge-pdf"), "目录:单PDF无合并")
     let doublePDF = ActionCatalog.actions(
         for: [url("a.pdf"), url("b.pdf")],
-        onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }
+        onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }, onSizePanel: { _ in }
     )
     Check.that(doublePDF.map(\.id).contains("merge-pdf"), "目录:双PDF有合并")
 
     if FFmpegEngine.detect() == nil {
         let video = ActionCatalog.actions(
             for: [url("clip.mov")],
-            onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }
+            onRun: { _, _ in }, onTools: { _ in }, onEdit: { _ in }, onSizePanel: { _ in }
         )
         Check.that(!video.map(\.id).contains("convert-video-mp4"), "目录:无ffmpeg时视频动作隐藏")
     }

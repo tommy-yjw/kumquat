@@ -60,11 +60,12 @@ enum ActionCatalog {
     // MARK: 主轮盘
 
     /// 生成主菜单动作。onRun 由上层注入(启动 JobRunner 并负责完成通知);
-    /// onTools 由上层注入(打开工具轮盘)。
+    /// onTools 由上层注入(打开工具轮盘);onSizePanel 由上层注入(压缩到指定大小面板)。
     static func actions(for files: [URL],
                         onRun: @escaping (ActionKind, [URL]) -> Void,
                         onTools: @escaping ([URL]) -> Void,
-                        onEdit: @escaping (EditorRequest) -> Void) -> [MenuAction] {
+                        onEdit: @escaping (EditorRequest) -> Void,
+                        onSizePanel: @escaping ([URL]) -> Void) -> [MenuAction] {
         var primary: [MenuAction] = []
         var tools: [MenuAction] = []
         let images = files.filter(isImage)
@@ -197,6 +198,34 @@ enum ActionCatalog {
                         perform: { onRun(.convertAudio(format), audios) }
                     ))
                 }
+                // 音频工具组
+                if audios.count == 1 {
+                    primary.append(MenuAction(
+                        id: "trim-audio", title: "剪短…", systemImage: "timeline.selection",
+                        accent: .cyan, files: audios,
+                        perform: { onEdit(EditorRequest(urls: audios, mode: .trimVideo)) }
+                    ))
+                }
+                primary.append(MenuAction(
+                    id: "normalize-audio", title: "音量归一化", systemImage: "speaker.wave.2",
+                    accent: .cyan, files: audios,
+                    perform: { onRun(.normalizeAudio, audios) }
+                ))
+                primary.append(MenuAction(
+                    id: "channels-mono", title: "转 Mono", systemImage: "circle.circle",
+                    accent: .cyan, files: audios,
+                    perform: { onRun(.convertChannels(1), audios) }
+                ))
+                primary.append(MenuAction(
+                    id: "channels-stereo", title: "转 双声道", systemImage: "square.stack.3d.up",
+                    accent: .cyan, files: audios,
+                    perform: { onRun(.convertChannels(2), audios) }
+                ))
+                tools.append(MenuAction(
+                    id: "audio-waveform", title: "波形图", systemImage: "chart.bar.xaxis",
+                    accent: .cyan, files: audios,
+                    perform: { onRun(.audioWaveform, audios) }
+                ))
             }
         }
 
@@ -287,6 +316,15 @@ enum ActionCatalog {
             id: "create-zip", title: "压缩为ZIP", systemImage: "doc.zipper",
             accent: .mint, files: files, perform: { onRun(.createZip, files) }
         ))
+
+        // 压缩到指定大小(图片无需 ffmpeg;视频需要)
+        if !images.isEmpty || (!videos.isEmpty && FFmpegEngine.detect() != nil) {
+            primary.append(MenuAction(
+                id: "compress-to-size", title: "压到指定大小…", systemImage: "target",
+                accent: .indigo, files: files,
+                perform: { onSizePanel(files) }
+            ))
+        }
 
         // 扇区上限:主轮盘最多 9 项,溢出移入工具轮盘
         while primary.count > 8 {

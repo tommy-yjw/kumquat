@@ -49,6 +49,17 @@ enum SelfTest {
             } else {
                 FileHandle.standardError.write(Data("⏭️ ffmpeg 未安装,视频引擎跳过\n".utf8))
             }
+
+            stage("压缩到指定大小(图片二分)")
+            try await testCompressToSize(root.appendingPathComponent("img"))
+
+            if FFmpegEngine.detect() != nil {
+                stage("音频工具组(归一化/声道/波形)")
+                try await testAudioTools(root.appendingPathComponent("video"))
+            }
+
+            stage("Redact 三模式渲染(ImageComposer)")
+            try testRedactRendering(root.appendingPathComponent("img"))
         } catch {
             that(false, "测试执行异常:\(error.localizedDescription)")
             FileHandle.standardError.write(Data("💥 \(error)\n".utf8))
@@ -163,5 +174,48 @@ enum SelfTest {
         let audio = await runner.run(kind: .extractAudio(.m4a), files: [withAudio])
         that(audio.first?.succeeded == true
              && audio.first?.output?.pathExtension == "m4a", "视频:提取音轨 M4A")
+    }
+
+    private static func testCompressToSize(_ directory: URL) async throws {
+        let source = try makeJPEG(directory: directory, name: "big.jpg", width: 800, height: 600, red: 0.9)
+        let target = 40 * 1024
+        let output = directory.appendingPathComponent("small-target.jpg")
+        try await CompressEngine.image(input: source, output: output, targetBytes: target)
+        let size = (try? FileManager.default.attributesOfItem(atPath: output.path)[.size] as? Int) ?? 0
+        that(size > 0 && size <= target + 2048, "压缩到 40KB 内(实际 \(size)B)")
+    }
+
+    private static func testAudioTools(_ directory: URL) async throws {
+        let source = directory.appendingPathComponent("audio-src.mp4")
+        guard FileManager.default.fileExists(atPath: source.path) else { return }
+        let runner = JobRunner()
+        let normalized = await runner.run(kind: .normalizeAudio, files: [source])
+        that(normalized.first?.succeeded == true, "音频:音量归一化(loudnorm)")
+        let mono = await runner.run(kind: .convertChannels(1), files: [source])
+        that(mono.first?.succeeded == true, "音频:转 Mono")
+        let waveform = await runner.run(kind: .audioWaveform, files: [source])
+        that(waveform.first?.succeeded == true
+             && waveform.first?.output?.pathExtension == "png", "音频:波形图 PNG")
+    }
+
+    private static func testRedactRendering(_ directory: URL) throws {
+        let source = try makeJPEG(directory: directory, name: "redact-src.jpg", width: 800, height: 600, red: 0.5)
+        guard let cgImage = CGImageSourceCreateWithURL(source as CFURL, nil)
+            .flatMap({ CGImageSourceCreateImageAtIndex($0, 0, nil) }) else {
+            throw NSError(domain: "Kumquat.SelfTest", code: 4,
+                          userInfo: [NSLocalizedDescriptionKey: "无法读取测试图"])
+        }
+        for style in RedactStyle.allCases {
+            let composed = try ImageComposer.render(
+                source: cgImage,
+                crop: CGRect(x: 0.1, y: 0.1, width: 0.6, height: 0.6),
+                redactions: [RedactionRect(rect: CGRect(x: 0.2, y: 0.2, width: 0.3, height: 0.3),
+                                           style: style)],
+                annotations: [EditorAnnotation(kind: .arrow,
+                                               from: CGPoint(x: 0.15, y: 0.15),
+                                               to: CGPoint(x: 0.45, y: 0.45), text: nil)])
+            that(composed.width == 480 && composed.height == 360,
+                 "Redact:\(style.title) 渲染 480×360")
+        }
     }
 }

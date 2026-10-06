@@ -1,6 +1,8 @@
 import AppKit
 import AVKit
+import ImageIO
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - 编辑器请求与模式
 
@@ -59,7 +61,8 @@ final class EditorModel: ObservableObject {
 
     @Published var tool: DrawTool = .crop
     @Published var cropRect: CGRect?            // 归一化(y 向下)
-    @Published var redactions: [CGRect] = []
+    @Published var redactions: [RedactionRect] = []
+    @Published var redactStyle: RedactStyle = .solid
     @Published var annotations: [EditorAnnotation] = []
     @Published var liveFrom: CGPoint?
     @Published var liveTo: CGPoint?
@@ -69,6 +72,20 @@ final class EditorModel: ObservableObject {
     @Published var trimEnd: Double = 0
 
     var aspect: CGFloat { CGFloat(image?.width ?? 16) / CGFloat(image?.height ?? 9) }
+
+    /// 像素化预览的低清整图(降到 1/24)。
+    lazy var pixelatedSource: CGImage? = {
+        guard let image else { return nil }
+        let smallWidth = max(2, image.width / 24)
+        let smallHeight = max(2, image.height / 24)
+        guard let context = CGContext(data: nil, width: smallWidth, height: smallHeight,
+                                      bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.interpolationQuality = .low
+        context.draw(image, in: CGRect(x: 0, y: 0, width: smallWidth, height: smallHeight))
+        return context.makeImage()
+    }()
 
     private init(source: URL, image: CGImage?, videoURL: URL?) {
         self.source = source
@@ -114,123 +131,32 @@ final class EditorModel: ObservableObject {
                           userInfo: [NSLocalizedDescriptionKey: "没有可导出的图像"])
         }
         let width = cgImage.width, height = cgImage.height
-        let crop = pixelRect(cropRect ?? CGRect(x: 0, y: 0, width: 1, height: 1),
-                             in: CGFloat(width), CGFloat(height))
-        guard crop.width >= 8, crop.height >= 8 else {
-            throw NSError(domain: "Kumquat.Editor", code: 2,
-                          userInfo: [NSLocalizedDescriptionKey: "裁剪区域太小"])
-        }
-
-        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
-                                         pixelsWide: Int(crop.width), pixelsHigh: Int(crop.height),
-                                         bitsPerSample: 8, samplesPerPixel: 4,
-                                         hasAlpha: true, isPlanar: false,
-                                         colorSpaceName: .deviceRGB, bytesPerRow: 0,
-                                         bitsPerPixel: 0) else {
-            throw NSError(domain: "Kumquat.Editor", code: 3,
-                          userInfo: [NSLocalizedDescriptionKey: "无法创建画布"])
-        }
-        NSGraphicsContext.saveGraphicsState()
-        let context = NSGraphicsContext(bitmapImageRep: rep)!
-        NSGraphicsContext.current = context
-
-        // 底图:原图的 crop 区域 → 画布(NSImage draw 的 from 是 y 向上坐标)
-        let base = NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
-        let sourceRect = NSRect(x: crop.minX,
-                                y: CGFloat(height) - crop.maxY,
-                                width: crop.width, height: crop.height)
-        base.draw(in: NSRect(origin: .zero, size: crop.size),
-                  from: sourceRect, operation: .copy, fraction: 1.0)
-
-        // 归一化(y 向下) → 画布本地坐标(y 向上)
-        func local(_ normalized: CGRect) -> NSRect {
-            let pixel = pixelRect(normalized, in: CGFloat(width), CGFloat(height))
-            return NSRect(x: pixel.minX - crop.minX,
-                          y: crop.height - (pixel.maxY - crop.minY),
-                          width: pixel.width, height: pixel.height)
-        }
-        func localPoint(_ normalized: CGPoint) -> NSPoint {
-            let pixel = CGPoint(x: normalized.x * CGFloat(width), y: normalized.y * CGFloat(height))
-            return NSPoint(x: pixel.x - crop.minX, y: crop.height - (pixel.y - crop.minY))
-        }
-
-        // 涂黑:永久像素级
-        NSColor.black.setFill()
-        for redaction in redactions {
-            local(redaction).fill()
-        }
-
-        // 标注
-        let fontSize = max(16, CGFloat(width) * 0.022)
-        for annotation in annotations {
-            switch annotation.kind {
-            case .arrow:
-                let from = localPoint(annotation.from), to = localPoint(annotation.to)
-                let path = NSBezierPath()
-                path.move(to: from)
-                path.line(to: to)
-                path.lineWidth = max(2.5, fontSize * 0.12)
-                NSColor.red.setStroke()
-                path.stroke()
-                // 箭头头部:两条短线
-                let angle = Foundation.atan2(to.y - from.y, to.x - from.x)
-                let headLength = max(10, fontSize * 0.5)
-                for spread in [CGFloat.pi * 0.82, -CGFloat.pi * 0.82] {
-                    let tip = NSPoint(x: to.x + Foundation.cos(angle + spread) * headLength,
-                                      y: to.y + Foundation.sin(angle + spread) * headLength)
-                    let head = NSBezierPath()
-                    head.move(to: to)
-                    head.line(to: tip)
-                    head.lineWidth = path.lineWidth
-                    head.stroke()
-                }
-            case .rect:
-                let path = NSBezierPath(rect: local(self.rect(from: annotation.from, to: annotation.to)).insetBy(dx: 1, dy: 1))
-                path.lineWidth = max(2.5, fontSize * 0.12)
-                NSColor.red.setStroke()
-                path.stroke()
-            case .text:
-                guard let text = annotation.text, !text.isEmpty else { continue }
-                let paragraph = NSMutableParagraphStyle()
-                paragraph.lineBreakMode = .byWordWrapping
-                let attributes: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
-                    .foregroundColor: NSColor.red,
-                    .strokeWidth: -2.0, // 描边增强可读性
-                    .strokeColor: NSColor.white,
-                    .paragraphStyle: paragraph,
-                ]
-                let string = NSAttributedString(string: text, attributes: attributes)
-                let bounds = string.boundingRect(with: NSSize(width: CGFloat(width), height: .greatestFiniteMagnitude),
-                                                 options: [.usesLineFragmentOrigin])
-                let origin = localPoint(annotation.from)
-                let drawRect = NSRect(x: min(origin.x, crop.width - bounds.width - 4),
-                                      y: min(origin.y, crop.height - bounds.height - 4),
-                                      width: bounds.width, height: bounds.height)
-                string.draw(in: drawRect)
-            default:
-                continue
-            }
-        }
-        NSGraphicsContext.restoreGraphicsState()
+        let composed = try ImageComposer.render(source: cgImage,
+                                                crop: cropRect,
+                                                redactions: redactions,
+                                                annotations: annotations)
 
         // 写出:原为无损格式(png/gif/bmp)→ png;否则 jpeg q0.92
         let losslessExtensions: Set<String> = ["png", "gif", "bmp", "tif", "tiff"]
         let outputExtension = losslessExtensions.contains(source.pathExtension.lowercased()) ? "png" : "jpg"
-        let outputType: NSBitmapImageRep.FileType = outputExtension == "png" ? .png : .jpeg
-        let properties: [NSBitmapImageRep.PropertyKey: Any] = outputExtension == "png"
-            ? [:]
-            : [.compressionFactor: 0.92]
-        guard let data = rep.representation(using: outputType, properties: properties) else {
-            throw NSError(domain: "Kumquat.Editor", code: 4,
-                          userInfo: [NSLocalizedDescriptionKey: "编码失败"])
-        }
         let output = OutputNamer.uniqueOutput(for: source, suffix: "编辑", fileExtension: outputExtension)
-        try data.write(to: output)
+        let outputType: UTType = outputExtension == "png" ? .png : .jpeg
+        guard let destination = CGImageDestinationCreateWithURL(output as CFURL,
+                                                                outputType.identifier as CFString, 1, nil) else {
+            throw NSError(domain: "Kumquat.Editor", code: 4,
+                          userInfo: [NSLocalizedDescriptionKey: "无法写出 \(output.lastPathComponent)"])
+        }
+        var properties: [CFString: Any] = [:]
+        if outputExtension == "jpg" {
+            properties[kCGImageDestinationLossyCompressionQuality] = 0.92
+        }
+        CGImageDestinationAddImage(destination, composed, properties as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            throw NSError(domain: "Kumquat.Editor", code: 5,
+                          userInfo: [NSLocalizedDescriptionKey: "写出失败 \(output.lastPathComponent)"])
+        }
         return output
     }
-
-    private func imageSourceRect() -> CGRect? { image == nil ? nil : .zero }
 }
 
 /// 归一化矩形(y 向下) → 像素矩形。
@@ -341,6 +267,17 @@ private struct ImageEditorView: View {
                 .labelsHidden()
                 .frame(maxWidth: 430)
 
+                if model.tool == .redact {
+                    Picker("样式", selection: $model.redactStyle) {
+                        ForEach(RedactStyle.allCases) { style in
+                            Text(style.title).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(maxWidth: 250)
+                }
+
                 Button("撤销一步") { model.undoLast() }
                     .disabled(model.annotations.isEmpty && model.redactions.isEmpty && model.cropRect == nil)
                 Spacer()
@@ -389,7 +326,7 @@ extension EditorModel {
     var hint: String {
         switch tool {
         case .crop: return "拖出裁剪区域,松手生效;“应用并保存”时才真正裁剪"
-        case .redact: return "拖出矩形,松手即涂黑(导出时永久像素级涂黑,不可恢复)"
+        case .redact: return "拖出矩形,松手按「\(redactStyle.title)」涂黑(导出时永久生效)"
         case .arrow: return "拖出箭头(从起点指向终点)"
         case .rect: return "拖出方框标注"
         case .text: return "点击位置输入文字"
@@ -419,12 +356,11 @@ private struct CanvasOverlay: View {
                 // 手势命中区不存在——第一次拖画永远无法开始(已实测)。
                 Color.clear
 
-                // 已提交的涂黑
-                ForEach(Array(model.redactions.enumerated()), id: \.offset) { _, rect in
-                    Rectangle()
-                        .fill(Color.black.opacity(0.92))
-                        .frame(width: rect.width * size.width, height: rect.height * size.height)
-                        .position(x: (rect.midX) * size.width, y: (rect.midY) * size.height)
+                // 已提交的涂黑(三样式)
+                ForEach(model.redactions) { redaction in
+                    RedactionPreviewView(redaction: redaction, size: size,
+                                         source: model.image,
+                                         pixelatedSource: model.pixelatedSource)
                 }
                 // 已提交的标注
                 ForEach(model.annotations) { annotation in
@@ -488,7 +424,10 @@ private struct CanvasOverlay: View {
                 .shadow(color: .black.opacity(0.6), radius: 1)
         case .redact:
             Rectangle()
-                .fill(Color.black.opacity(0.75))
+                .fill(Color.black.opacity(0.6))
+                .overlay(Text(model.redactStyle.title)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white))
                 .frame(width: rect.width * size.width, height: rect.height * size.height)
                 .position(x: rect.midX * size.width, y: rect.midY * size.height)
         case .arrow:
@@ -523,7 +462,9 @@ private struct CanvasOverlay: View {
                     if Self.isSignificant(rect) { model.cropRect = rect }
                     else { model.cropRect = nil }
                 case .redact:
-                    if Self.isSignificant(rect) { model.redactions.append(rect) }
+                    if Self.isSignificant(rect) {
+                        model.redactions.append(RedactionRect(rect: rect, style: model.redactStyle))
+                    }
                 case .arrow, .rect:
                     if Self.isSignificant(rect) {
                         model.annotations.append(EditorAnnotation(kind: model.tool, from: from, to: to, text: nil))
@@ -574,6 +515,60 @@ private struct Crosshair: View {
             Circle().fill(Color.red).frame(width: 3, height: 3)
         }
         .position(position)
+    }
+}
+
+/// 已提交涂黑区的三样式预览:实色=黑块;模糊=原区域实时高斯;像素化=低清源无插值铺放。
+private struct RedactionPreviewView: View {
+    let redaction: RedactionRect
+    let size: CGSize
+    let source: CGImage?
+    let pixelatedSource: CGImage?
+
+    private var frame: some View {
+        Rectangle()
+            .frame(width: redaction.rect.width * size.width,
+                   height: redaction.rect.height * size.height)
+            .position(x: redaction.rect.midX * size.width,
+                      y: redaction.rect.midY * size.height)
+    }
+
+    var body: some View {
+        switch redaction.style {
+        case .solid:
+            Rectangle()
+                .fill(Color.black.opacity(0.92))
+                .frame(width: redaction.rect.width * size.width,
+                       height: redaction.rect.height * size.height)
+                .position(x: redaction.rect.midX * size.width,
+                          y: redaction.rect.midY * size.height)
+        case .blur:
+            Group {
+                if let source {
+                    Image(decorative: source, scale: 1)
+                        .resizable()
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                        .blur(radius: 10)
+                } else {
+                    Rectangle().fill(Color.gray.opacity(0.6))
+                }
+            }
+            .mask(frame)
+        case .pixelate:
+            Group {
+                if let pixelatedSource {
+                    Image(decorative: pixelatedSource, scale: 1)
+                        .resizable()
+                        .interpolation(.none)
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                } else {
+                    Rectangle().fill(Color.gray.opacity(0.6))
+                }
+            }
+            .mask(frame)
+        }
     }
 }
 

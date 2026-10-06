@@ -41,6 +41,14 @@ enum ActionKind {
     case convertDocTextUtil(String) // textutil 目标格式:docx/rtf/html/txt
     case convertOfficePDF           // docx/xlsx/pptx 等 → PDF(LibreOffice 无头)
     case trimVideo(Double, Double)  // 剪短:起止秒(编辑器窗口发起)
+
+    // 音频工具组(仅检测到 ffmpeg 才出现)
+    case normalizeAudio             // 音量归一化(loudnorm)
+    case convertChannels(Int)       // 声道转换:1=Mono 2=Stereo
+    case audioWaveform              // 波形图导出 PNG(showwavespic)
+
+    // 压缩到指定大小(选大小面板发起)
+    case compressToSize(Int)        // 目标字节数:图片走质量二分,视频走码率换算
 }
 
 struct JobOutcome {
@@ -300,6 +308,68 @@ final class JobRunner {
                                            inputOptions: ["-ss", String(format: "%.2f", start)],
                                            extraArguments: ["-t", String(format: "%.2f", end - start)],
                                            cancel: cancel)
+
+            // MARK: 音频工具组(ffmpeg)
+
+            case .normalizeAudio:
+                return try await runFFmpeg(file: file, fileExtension: file.lowercasedExtension,
+                                           suffix: "归一化",
+                                           extraArguments: ["-af", "loudnorm"],
+                                           cancel: cancel)
+
+            case let .convertChannels(channels):
+                return try await runFFmpeg(file: file, fileExtension: file.lowercasedExtension,
+                                           suffix: channels == 1 ? "Mono" : "双声道",
+                                           extraArguments: ["-ac", "\(channels)"],
+                                           cancel: cancel)
+
+            case .audioWaveform:
+                guard let ffmpeg = FFmpegEngine.detect() else {
+                    return JobOutcome(source: file, output: nil, skipped: true)
+                }
+                let output = OutputNamer.uniqueOutput(for: file, suffix: "波形", fileExtension: "png")
+                try await ProcessRunner.run(executablePath: ffmpeg.path,
+                                            arguments: ["-y", "-i", file.path,
+                                                        "-filter_complex",
+                                                        "showwavespic=s=1280x360:colors=#ff8c00",
+                                                        "-frames:v", "1", output.path],
+                                            timeout: 300, cancel: cancel)
+                return JobOutcome(source: file, output: output)
+
+            // MARK: 压缩到指定大小
+
+            case let .compressToSize(targetBytes):
+                if ActionCatalog.isImage(file) {
+                    let output = OutputNamer.uniqueOutput(for: file, suffix: "压缩",
+                                                          fileExtension: "jpg")
+                    try await CompressEngine.image(input: file, output: output,
+                                                   targetBytes: targetBytes, cancel: cancel)
+                    return JobOutcome(source: file, output: output)
+                }
+                guard FFmpegEngine.detect() != nil else {
+                    return JobOutcome(source: file, output: nil, skipped: true)
+                }
+                guard let ffprobe = CompressEngine.detectFFprobe(ffmpeg: FFmpegEngine.detect()!) else {
+                    return JobOutcome(source: file, output: nil,
+                                      errorText: "未找到 ffprobe")
+                }
+                guard let duration = await CompressEngine.duration(of: file, ffprobe: ffprobe) else {
+                    return JobOutcome(source: file, output: nil,
+                                      errorText: "无法读取视频时长")
+                }
+                guard cancel?.isCancelled != true else {
+                    return JobOutcome(source: file, output: nil, errorText: KumquatCancelled.user.description)
+                }
+                // 目标字节 → 总码率;音频固定 128k,余量给视频
+                let totalBits = Double(targetBytes) * 8
+                let videoBitrate = max(120_000, Int(totalBits / duration) - 128_000)
+                let output = OutputNamer.uniqueOutput(for: file, suffix: "压缩",
+                                                      fileExtension: "mp4")
+                try await CompressEngine.videoWithBitrate(input: file, output: output,
+                                                          videoBitrate: videoBitrate,
+                                                          ffmpeg: FFmpegEngine.detect()!,
+                                                          cancel: cancel)
+                return JobOutcome(source: file, output: output)
             }
         } catch {
             let text: String

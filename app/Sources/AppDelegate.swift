@@ -133,8 +133,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             for: files,
             onRun: { [weak self] kind, runFiles in self?.startJob(kind: kind, files: runFiles) },
             onTools: { [weak self] toolFiles in self?.showToolWheel(for: toolFiles) },
-            onEdit: { [weak self] request in self?.openEditor(request) }
+            onEdit: { [weak self] request in self?.openEditor(request) },
+            onSizePanel: { [weak self] sizeFiles in self?.openSizePanel(sizeFiles) }
         )
+    }
+
+    private func openSizePanel(_ files: [URL]) {
+        SizePanelController.shared.show(files: files, onRun: { [weak self] kind, runFiles in
+            self?.startJob(kind: kind, files: runFiles)
+        })
     }
 
     private func openEditor(_ request: EditorRequest) {
@@ -291,6 +298,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case let .convertDocTextUtil(format): verb = "文档 → \(format.uppercased())"
         case .convertOfficePDF: verb = "Office → PDF"
         case let .trimVideo(start, end): verb = String(format: "剪短 %.0f-%.0fs", start, end)
+        case .normalizeAudio: verb = "音量归一化"
+        case let .convertChannels(channels): verb = channels == 1 ? "转 Mono" : "转 双声道"
+        case .audioWaveform: verb = "波形图"
+        case let .compressToSize(bytes): verb = String(format: "压缩至 %.1f MB", Double(bytes) / 1_048_576)
         }
         return "\(verb) · \(name)"
     }
