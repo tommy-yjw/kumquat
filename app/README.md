@@ -1,6 +1,6 @@
 # 金桔 / Kumquat
 
-常驻屏幕一角的**悬浮投递气泡**:把文件拖上去,气泡附近弹出**径向动作菜单**,选一个动作即完成转换。**拖文件时按住 Shift**,指针处直接弹出**投放轮盘**,投到扇区即执行(Tangerine 签名手势,免辅助功能权限实现)。纯本地运行,不上传任何文件。灵感来自 Tangerine(逆向调研见 `kumquat/docs/reverse-report.md`),是它的开源复刻。
+常驻屏幕一角的**悬浮投递气泡**:把文件拖上去,气泡附近弹出**径向动作菜单**,选一个动作即完成转换。**拖文件时按住 Shift**,指针处直接弹出**投放轮盘**,投到扇区即执行(Tangerine 签名手势,免辅助功能权限实现)。纯本地运行,不上传任何文件。灵感来自 [Tangerine](https://tangerineformac.com/),是它的开源复刻。本文件是面向开发者的**详细技术文档**;安装与使用说明见仓库根 [README](../README.md)。
 
 - 纯 Swift(AppKit + SwiftUI + PDFKit + ImageIO),无 Xcode 工程、无网络组件
 - 引擎全部系统能力:图片 `sips`/ImageIO、PDF `PDFKit`、归档 `ditto`/`tar`、文档 `textutil`

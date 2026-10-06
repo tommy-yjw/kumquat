@@ -1,116 +1,89 @@
 # 金桔 / Kumquat
 
-> Tangerine 的开源复刻:常驻投递气泡 + 全局 Shift 拖拽 + 径向动作菜单,纯本地文件转换工具。MIT 协议。
+[![CI](https://github.com/tommy-yjw/kumquat/actions/workflows/ci.yml/badge.svg)](https://github.com/tommy-yjw/kumquat/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-blue)
 
-常驻屏幕一角的**悬浮投递气泡**:把文件拖上去,气泡附近弹出**径向动作菜单**,选一个动作即完成转换。**拖文件时按住 Shift**,指针处直接弹出**投放轮盘**,投到扇区即执行(Tangerine 签名手势,免辅助功能权限实现)。纯本地运行,不上传任何文件。灵感来自 Tangerine,是它的开源复刻(功能级逆向,未使用任何其代码或资源)。
+**常驻屏幕一角的拖拽转换工具**——把文件拖到悬浮气泡上弹出径向动作菜单;或者**拖着文件直接按住 Shift**,指针位置弹出投放轮盘,投到扇区即完成转换。全程本地处理,不上传任何文件,应用内不含任何网络组件。
 
-- 纯 Swift(AppKit + SwiftUI + PDFKit + ImageIO),无 Xcode 工程、无网络组件
-- 引擎全部系统能力:图片 `sips`/ImageIO、PDF `PDFKit`、归档 `ditto`/`tar`、文档 `textutil`
-- 可选引擎自动探测,装了才显示对应动作:视频/音频 `ffmpeg`、文档转换 `pandoc`
-- 转换结果保存在**源文件同目录**,完成后发系统通知(点击可在 Finder 中显示)
+灵感来自 [Tangerine](https://tangerineformac.com/),是其交互与功能的开源复刻(功能级实现,未使用其任何代码或资源)。
 
-## 构建与运行
+## 功能
+
+**图片**(系统 sips / ImageIO,零依赖):JPG / PNG / HEIC / TIFF 互转、压缩、去 EXIF、旋转、翻转、缩放、灰度、多图拼贴、合成 PDF,以及内置编辑器(裁剪 / 涂黑 / 标注)
+
+**PDF**(PDFKit):合并、拆分、压缩、转图片、旋转
+
+**视频 / 音频**(需自行安装 [ffmpeg](https://formulae.brew.sh/formula/ffmpeg)):MP4 / MOV / MKV / WebM / GIF 互转、抽音轨、变速、抽帧、剪短、涂黑;音频归一化、声道转换、波形图
+
+**Office → PDF**(需 [LibreOffice](https://www.libreoffice.org/)):docx / xlsx / pptx 无头转换
+
+**文档**(需 [pandoc](https://pandoc.org/)):md / docx / epub / html 互转;.doc 由系统 textutil 兜底
+
+**归档**:打包 ZIP(系统 ditto)、解压 zip / tar.gz
+
+可选引擎会在运行时探测:装了才显示对应动作,不装不影响其他功能。
+
+## 安装
+
+**方式一:下载**
+
+从 [Releases](https://github.com/tommy-yjw/kumquat/releases) 页下载 `Kumquat-*.zip`,解压后拖入「应用程序」。
+
+> 应用为 ad-hoc 签名(未公证),首次打开请**右键点击 → 打开**;若仍被拦,可在终端执行 `xattr -cr /Applications/Kumquat.app` 后再开。
+
+**方式二:源码构建**
 
 ```bash
-cd app
-./build.sh          # 一条命令:swiftc 编译 → 组装 Kumquat.app → ad-hoc 签名
+git clone https://github.com/tommy-yjw/kumquat.git
+cd kumquat/app
+./build.sh          # swiftc 编译 → 组装 Kumquat.app → ad-hoc 签名
 open build/Kumquat.app
 ```
 
-## 测试
+仅需 Xcode Command Line Tools(`xcode-select --install`),不需要完整 Xcode。
 
-```bash
-cd app
-./run-tests.sh      # 两阶段:CLI 纯逻辑(命名/分类/目录/PDF 引擎)+ App 宿主引擎自测(sips/LibreOffice/ffmpeg 子进程)
-```
+## 使用
 
-- 依赖:仅 Xcode **Command Line Tools**(`swiftc`);按 `uname -m` 自动选择 arm64/x86_64,最低系统 macOS 13.0
-- 调试钩子:`KUMQUAT_DEBUG=1` 输出拖拽链路日志;`KUMQUAT_PREVIEW_MENU=1` 启动后 0.8s 直接弹径向菜单(不走真实拖拽)
-
-## 两种触发方式
-
-| 方式 | 操作 | 适合 |
-|---|---|---|
-| 投递气泡 | 把文件拖到橙色气泡上 → 弹径向菜单 → 点扇区执行 | 精确、新手 |
-| **Shift 手势**(v2) | 拖着文件**按住 Shift** → 指针处弹出投放轮盘 → **投到扇区即执行** | 快手流,全系统任意位置 |
-
-- Shift 手势实现(免权限):`CGEventSource.flagsState` 读修饰键 + 轮询 `NSPasteboard.changeCount` 感知拖拽开始 + `.statusBar` 层级面板让拖拽会话重定向进来。**不需要辅助功能/输入监控授权**
-- 轮盘消失:松开 Shift 且无悬停 / 投放完成 / 点按 / 15 秒超时;菜单栏可开关(默认开)
-- 支持输入:图片 `jpg/jpeg/png/heic/gif/bmp/webp/avif/jp2`、PDF、文档 `md/txt/html/rtf/doc/docx/epub…`、归档 `zip/tar.gz/tgz`、文件夹、音视频 `mov/mp4/mkv/mp3/m4a/wav/flac…`(需 ffmpeg)
-
-## 动作清单(v2)
-
-**图片(系统 sips / ImageIO,始终可用)**
-
-| 动作 | 实际执行 |
+| 方式 | 操作 |
 |---|---|
-| 转为 JPG / PNG / HEIC / TIFF | `sips -s format`(源已是该格式不进菜单) |
-| 转为 WebP | ImageIO 重编码(**运行时探测,本机 macOS 26.6 实测不可写,自动隐藏**) |
-| 压缩 | `sips` JPEG 质量 60 |
-| 去 EXIF | ImageIO 空属性字典重写(sips 无法去元数据,已实测) |
-| 顺/逆时针 90°、水平/垂直翻转 | `sips -r` / `sips -f` |
-| 缩放 50%、长边 1920 | `sips --resampleWidth/Height` |
-| 灰度 | `sips --matchTo` 系统 Gray Profile |
-| 拼贴(≥2 图) | CoreGraphics 网格合成,2 图横排 / 3-4 图 2×2 / 5-6 图 3×2 / 7-9 图 3×3,带透明出 PNG 否则 JPEG |
-| 合成 PDF | PDFKit 每图一页 |
+| 投递气泡 | 把文件拖到屏幕一角的橙色气泡上 → 弹出径向菜单 → 点扇区执行 |
+| Shift 手势 | 拖着文件**按住 Shift** → 指针处弹出投放轮盘 → **投到扇区上松手即执行** |
 
-**PDF(PDFKit,始终可用)**
+- 径向菜单扇区带数字角标,**按数字键 1-9 直接触发**;Esc 取消
+- 图片编辑器:裁剪(可拖移/把手调整)、涂黑(实色/模糊/像素化)、标注(箭头/方框/文字)、缩放;支持选中/移动/删除,`Cmd+S` 保存
+- 视频编辑器:双滑块剪短 + 涂黑模式
+- 多文件批量处理,右下角进度窗可逐任务取消
+- 菜单栏 🍊 可开关手势/气泡、查看引擎状态
 
-| 动作 | 实际执行 |
-|---|---|
-| 合并 PDF(≥2 个) | 按选择顺序串接 |
-| 拆分 PDF | 每页一个 PDF("原名 页N.pdf") |
-| 压缩 PDF | 逐页位图化 150dpi 重写(**有损**,矢量文本会转位图;截图/扫描件压缩收益明显) |
-| 转为图片 | 每页 2× PNG |
-| 顺/逆时针 90°(工具轮盘) | `PDFPage.rotation` 重写 |
+转换副本保存在**源文件同目录**,完成后发系统通知(首次使用会请求通知权限)。
 
-**视频/音频(需 ffmpeg,未装自动隐藏;`brew install ffmpeg`)**
+## 隐私
 
-- 互转 MP4 / MOV / MKV / WEBM / GIF(12fps、最长边 720)、音频 MP3 / M4A / WAV / FLAC、视频提取音轨
-- 变速 0.5× / 1.5× / 2×(`setpts` + `atempo`);抽帧 PNG(1s 处)——工具轮盘
-- ffmpeg 分支参数未经真实运行验证(本机未装,README 如实记录)
+纯本地:全部转换由系统工具与本地子进程完成,应用**不含任何网络代码**,不上传、不遥测。
 
-**文档(pandoc 检测到才出现;.doc 用系统 textutil 兜底)**
+## 开发
 
-- pandoc:DOCX / EPUB / HTML / MD / TXT 互转(读取 md/txt/html/docx/epub/rst/org/tex)
-- textutil:.doc → DOCX / RTF / HTML / TXT(系统自带,始终可用)
+- 纯 Swift(AppKit + SwiftUI + PDFKit + ImageIO),无第三方依赖,详见 [app/README.md](app/README.md)
+- 测试:`cd app && ./run-tests.sh`(两阶段:CLI 纯逻辑 + App 宿主引擎自测,真实子进程)
+- CI:GitHub Actions(macOS runner)自动构建并跑同一套测试
 
-**归档(系统 ditto / tar,始终可用)**
+## 系统要求
 
-- 压缩为 ZIP:任何选择(含文件夹、混合类型);多来源经暂存目录合并压入(ditto -c 单来源限制,已实测绕过)
-- 解压:zip → `ditto -x -k`;tar/tar.gz/tgz → `tar -xf`,输出到"原名 解压"目录
+- macOS 13.0+(Apple Silicon / Intel)
+- Xcode Command Line Tools(仅构建需要)
 
-## 任务进度窗(v2)
+## 已知限制
 
-右下角自动弹出:每个任务一行(转圈/✓/✗ + 文件名 + 输出),进行中的任务可**逐个取消**(取消通过 CancelToken 传导到子进程 terminate);全部结束 2.5 秒后自动收起。
+- 图片导出格式受系统 ImageIO 能力限制(部分机器不可写 WebP,运行时自动隐藏对应动作)
+- 不支持 RAR 解压(专有格式)
+- 视频涂黑当前为整段实色,不支持模糊样式与时间段限定
 
-## 键盘操作(v2)
+## 致谢
 
-径向菜单每个扇区带数字角标:**按数字键 1-9 直接触发对应动作**,Esc 取消。
-
-## 输出规则(与 Tangerine 一致)
-
-- 副本保存在源文件同目录,源文件不动;转换 = `原名.新扩展名`,动作 = `原名 动作后缀`,重名加 " 2"
-- 完成后发系统通知;首次转换时询问通知权限
-
-## 与 Tangerine 的差距(v2 后)
-
-| 维度 | Tangerine($15 买断) | 金桔 v2 |
-|---|---|---|
-| 核心交互 | 拖拽中按 Shift 出轮盘,投放执行 | **已实现**(免权限方案);另有气泡入口 |
-| 格式覆盖 | 宣称 190 种 | 图片 9 动作 + PDF 6 + 音视频 11(需 ffmpeg)+ 文档 5-6 + 归档 2,共 30+ 动作 |
-| 文件工具 | 宣称 25 种(涂黑、拼贴、裁剪、变速、Merge PDF…) | 拼贴/变速/合并/旋转/缩放/灰度已实现;**自由裁剪、涂黑、标注需要画布 UI,未做** |
-| 批量 | 多文件混合、进度窗可取消 | **已实现**(进度窗 + 逐任务取消) |
-| Office→PDF | 宣称支持 | **未做**(系统无免费转换路径,需 MS Office 或 LibreOffice 才能高质量转换) |
-| WebP 输出 | 宣称支持 | 本机 ImageIO 不可写(实测),自动隐藏 |
-| 引擎 | 未公开(宣称全本地) | sips/ImageIO/PDFKit/ditto/tar/textutil + 可选 ffmpeg/pandoc |
-| 分发 | Mac App Store | 源码 + build.sh 自行构建,ad-hoc 签名 |
-| 隐私 | "never uploads, no server" | 同底线:纯本地、无任何网络组件 |
-
-## 明确没做的(v4 候选)
-
-自由裁剪/涂黑/标注的画布 UI(需要交互式编辑窗口)、Office→PDF(依赖 Office/LibreOffice 安装)、视频剪短的时间范围选择 UI。
+- [Tangerine](https://tangerineformac.com/) —— 交互与产品形态的灵感来源
+- 系统工具链:sips、ImageIO、PDFKit、AVFoundation、ditto、tar、textutil;可选引擎 ffmpeg、pandoc、LibreOffice
 
 ## License
 
-MIT — 见 [LICENSE](LICENSE)。
+[MIT](LICENSE)
