@@ -173,11 +173,11 @@ final class EditorModel: ObservableObject {
                 NSColor.red.setStroke()
                 path.stroke()
                 // 箭头头部:两条短线
-                let angle = atan2(to.y - from.y, to.x - from.x)
+                let angle = Foundation.atan2(to.y - from.y, to.x - from.x)
                 let headLength = max(10, fontSize * 0.5)
                 for spread in [CGFloat.pi * 0.82, -CGFloat.pi * 0.82] {
-                    let tip = NSPoint(x: to.x + cos(angle + spread) * headLength,
-                                      y: to.y + sin(angle + spread) * headLength)
+                    let tip = NSPoint(x: to.x + Foundation.cos(angle + spread) * headLength,
+                                      y: to.y + Foundation.sin(angle + spread) * headLength)
                     let head = NSBezierPath()
                     head.move(to: to)
                     head.line(to: tip)
@@ -415,6 +415,10 @@ private struct CanvasOverlay: View {
         GeometryReader { geo in
             let size = geo.size
             ZStack {
+                // 兜底填充:没有此层时 ZStack 随内容收缩为零尺寸,
+                // 手势命中区不存在——第一次拖画永远无法开始(已实测)。
+                Color.clear
+
                 // 已提交的涂黑
                 ForEach(Array(model.redactions.enumerated()), id: \.offset) { _, rect in
                     Rectangle()
@@ -549,11 +553,11 @@ struct ArrowShape: Shape {
         let end = CGPoint(x: to.x * rect.width, y: to.y * rect.height)
         path.move(to: start)
         path.addLine(to: end)
-        let angle = atan2(end.y - start.y, end.x - start.x)
+        let angle = Foundation.atan2(end.y - start.y, end.x - start.x)
         let headLength = max(12, rect.width * 0.02)
         for spread in [CGFloat.pi * 0.82, -CGFloat.pi * 0.82] {
-            let tip = CGPoint(x: end.x + cos(angle + spread) * headLength,
-                              y: end.y + sin(angle + spread) * headLength)
+            let tip = CGPoint(x: end.x + Foundation.cos(angle + spread) * headLength,
+                              y: end.y + Foundation.sin(angle + spread) * headLength)
             path.move(to: end)
             path.addLine(to: tip)
         }

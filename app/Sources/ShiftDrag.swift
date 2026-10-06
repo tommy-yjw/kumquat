@@ -155,9 +155,9 @@ final class DropWheelCatcher: NSView {
         let threshold = RadialMetrics.itemDiameter * 0.75
         for index in 0..<count {
             let angle = Double(index) / Double(count) * 2 * .pi - .pi / 2
-            let sectorCenter = CGPoint(x: center.x + cos(angle) * radius,
-                                       y: center.y - sin(angle) * radius)
-            if hypot(point.x - sectorCenter.x, point.y - sectorCenter.y) <= threshold {
+            let sectorCenter = CGPoint(x: center.x + Foundation.cos(angle) * radius,
+                                       y: center.y - Foundation.sin(angle) * radius)
+            if Foundation.hypot(point.x - sectorCenter.x, point.y - sectorCenter.y) <= threshold {
                 return index
             }
         }

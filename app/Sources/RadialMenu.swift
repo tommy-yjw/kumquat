@@ -34,8 +34,8 @@ struct RadialLayout: Layout {
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         for (index, subview) in subviews.enumerated() {
             let angle = Double(index) / Double(count) * 2 * .pi - .pi / 2
-            let point = CGPoint(x: center.x + cos(angle) * radius,
-                                y: center.y + sin(angle) * radius)
+            let point = CGPoint(x: center.x + Foundation.cos(angle) * radius,
+                                y: center.y + Foundation.sin(angle) * radius)
             subview.place(at: point, anchor: .center, proposal: .unspecified)
         }
     }
@@ -254,7 +254,7 @@ final class RadialMenuController {
             let center = CGPoint(x: panel.frame.midX, y: panel.frame.midY)
             let discRadius = RadialMetrics.radius(for: self.actionCount) + RadialMetrics.itemDiameter / 2
             let loc = NSEvent.mouseLocation
-            if hypot(loc.x - center.x, loc.y - center.y) > discRadius {
+            if Foundation.hypot(loc.x - center.x, loc.y - center.y) > discRadius {
                 self.dismiss()
                 return nil
             }
