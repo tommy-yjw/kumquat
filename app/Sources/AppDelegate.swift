@@ -301,6 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .normalizeAudio: verb = "音量归一化"
         case let .convertChannels(channels): verb = channels == 1 ? "转 Mono" : "转 双声道"
         case .audioWaveform: verb = "波形图"
+        case let .redactVideo(rects): verb = "涂黑 \(rects.count) 处"
         case let .compressToSize(bytes): verb = String(format: "压缩至 %.1f MB", Double(bytes) / 1_048_576)
         }
         return "\(verb) · \(name)"

@@ -49,6 +49,7 @@ enum ActionKind {
 
     // 压缩到指定大小(选大小面板发起)
     case compressToSize(Int)        // 目标字节数:图片走质量二分,视频走码率换算
+    case redactVideo([CGRect])      // 视频涂黑:归一化矩形,整段实色(drawbox 链)
 }
 
 struct JobOutcome {
@@ -369,6 +370,24 @@ final class JobRunner {
                                                           videoBitrate: videoBitrate,
                                                           ffmpeg: FFmpegEngine.detect()!,
                                                           cancel: cancel)
+                return JobOutcome(source: file, output: output)
+
+            case let .redactVideo(rects):
+                guard let ffmpeg = FFmpegEngine.detect() else {
+                    return JobOutcome(source: file, output: nil, skipped: true)
+                }
+                guard !rects.isEmpty else {
+                    return JobOutcome(source: file, output: nil, skipped: true)
+                }
+                // drawbox 支持 iw/ih 表达式:归一化矩形直接换算,无需读视频尺寸
+                let chain = rects.map { rect in
+                    String(format: "drawbox=x=%.4f*iw:y=%.4f*ih:w=%.4f*iw:h=%.4f*ih:color=black@1:t=fill",
+                           rect.minX, rect.minY, rect.width, rect.height)
+                }.joined(separator: ",")
+                let output = OutputNamer.uniqueOutput(for: file, suffix: "涂黑", fileExtension: "mp4")
+                try await ProcessRunner.run(executablePath: ffmpeg.path,
+                                            arguments: ["-y", "-i", file.path, "-vf", chain, output.path],
+                                            timeout: 3600, cancel: cancel)
                 return JobOutcome(source: file, output: output)
             }
         } catch {

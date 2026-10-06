@@ -174,6 +174,11 @@ enum SelfTest {
         let audio = await runner.run(kind: .extractAudio(.m4a), files: [withAudio])
         that(audio.first?.succeeded == true
              && audio.first?.output?.pathExtension == "m4a", "视频:提取音轨 M4A")
+
+        let redacted = await runner.run(
+            kind: .redactVideo([CGRect(x: 0.1, y: 0.1, width: 0.3, height: 0.3)]),
+            files: [source])
+        that(redacted.first?.succeeded == true, "视频:涂黑(drawbox)")
     }
 
     private static func testCompressToSize(_ directory: URL) async throws {

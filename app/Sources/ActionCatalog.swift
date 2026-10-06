@@ -152,6 +152,11 @@ enum ActionCatalog {
                     accent: .pink, files: videos,
                     perform: { onEdit(EditorRequest(urls: videos, mode: .trimVideo)) }
                 ))
+                primary.append(MenuAction(
+                    id: "redact-video", title: "涂黑…", systemImage: "rectangle.on.rectangle.slash",
+                    accent: .pink, files: videos,
+                    perform: { onEdit(EditorRequest(urls: videos, mode: .redactVideo)) }
+                ))
             }
             if !videos.isEmpty {
                 for format in VideoFormat.allCases
