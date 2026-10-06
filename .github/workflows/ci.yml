@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 构建 App bundle
+        working-directory: app
+        run: ./build.sh
+
+      - name: 运行测试(阶段1 CLI 纯逻辑 + 阶段2 App 宿主引擎自测)
+        working-directory: app
+        run: ./run-tests.sh
