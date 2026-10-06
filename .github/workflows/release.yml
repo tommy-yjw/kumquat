@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 构建
+        working-directory: app
+        run: ./build.sh
+
+      - name: 测试
+        working-directory: app
+        run: ./run-tests.sh
+
+      - name: 制作 DMG 与 ZIP
+        working-directory: app
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./make-dmg.sh "$VERSION"
+          cd build
+          ditto -c -k --sequesterRsrc --keepParent Kumquat.app "Kumquat-v$VERSION.zip"
+
+      - name: 发布到 GitHub Release
+        working-directory: app/build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+              --title "金桔 $GITHUB_REF_NAME" \
+              --generate-notes \
+              --repo "$GITHUB_REPOSITORY" || true
+          gh release upload "$GITHUB_REF_NAME" \
+              "Kumquat-v$VERSION.dmg" \
+              "Kumquat-v$VERSION.dmg.sha256" \
+              "Kumquat-v$VERSION.zip" \
+              --clobber --repo "$GITHUB_REPOSITORY"
