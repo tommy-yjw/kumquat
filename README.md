@@ -26,9 +26,9 @@
 
 ## 安装
 
-**方式一:下载**
+**方式一:下载(推荐 DMG)**
 
-从 [Releases](https://github.com/tommy-yjw/kumquat/releases) 页下载 `Kumquat-*.zip`,解压后拖入「应用程序」。
+从 [Releases](https://github.com/tommy-yjw/kumquat/releases) 页下载 `Kumquat-*.dmg`,挂载后把 **Kumquat.app 拖入 Applications** 即完成安装;也可以下载 zip 解压使用。
 
 > 应用为 ad-hoc 签名(未公证),首次打开请**右键点击 → 打开**;若仍被拦,可在终端执行 `xattr -cr /Applications/Kumquat.app` 后再开。
 
