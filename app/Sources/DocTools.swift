@@ -83,3 +83,65 @@ enum TextUtilEngine {
                                     timeout: 600)
     }
 }
+
+// MARK: - PDF → Word 引擎(可选;经 python3 调开源 pdf2docx,运行时探测)
+
+import os
+
+enum PDFWordEngine {
+    private struct EngineState {
+        var checked = false
+        var ready = false
+        var python: URL?
+    }
+    private static let state = OSAllocatedUnfairLock(initialState: EngineState())
+
+    private static func candidatePythons() -> [URL] {
+        var paths: [URL] = []
+        if let path = ProcessInfo.processInfo.environment["PATH"] {
+            paths += path.split(separator: ":").map { URL(fileURLWithPath: "\($0)/python3") }
+        }
+        paths += [URL(fileURLWithPath: "/usr/bin/python3"),
+                  URL(fileURLWithPath: "/opt/homebrew/bin/python3"),
+                  URL(fileURLWithPath: "/usr/local/bin/python3")]
+        return paths
+    }
+
+    /// 真实探测(逐个 python 试 `import pdf2docx`),结果缓存整个进程周期。
+    /// 启动时在后台任务调用;菜单与任务只读缓存,不触发子进程。
+    static func prime() {
+        state.withLock { if $0.checked { return } }
+        for python in candidatePythons() {
+            guard FileManager.default.isExecutableFile(atPath: python.path) else { continue }
+            let process = Process()
+            process.executableURL = python
+            process.arguments = ["-c", "import pdf2docx"]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            do { try process.run() } catch { continue }
+            process.waitUntilExit()
+            if process.terminationStatus == 0 {
+                state.withLock {
+                    $0.checked = true
+                    $0.ready = true
+                    $0.python = python
+                }
+                return
+            }
+        }
+        state.withLock { $0.checked = true }
+    }
+
+    /// 菜单用:只读缓存,不触发探测。
+    static var cachedReady: Bool { state.withLock { $0.ready } }
+    static var cachedPython: URL? { state.withLock { $0.python } }
+
+    static func convert(python: URL, input: URL, output: URL,
+                        cancel: CancelToken? = nil) async throws {
+        try await ProcessRunner.run(
+            executablePath: python.path,
+            arguments: ["-c",
+                        "from pdf2docx import parse; parse(r'\(input.path)', r'\(output.path)')"],
+            timeout: 1200, cancel: cancel)
+    }
+}

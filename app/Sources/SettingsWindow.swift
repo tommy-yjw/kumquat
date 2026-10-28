@@ -76,6 +76,9 @@ private struct SettingsView: View {
             EngineRow(name: "LibreOffice(Office→PDF)", installed: OfficeEngine.detect() != nil,
                       hint: "docx/xlsx/pptx→PDF",
                       guideURL: "https://www.libreoffice.org/download")
+            EngineRow(name: "pdf2docx(PDF→Word)", installed: PDFWordEngine.cachedReady,
+                      hint: "pip3 install pdf2docx \"pymupdf<1.23\"",
+                      guideURL: "https://github.com/dothinking/pdf2docx")
 
             Divider()
             HStack {

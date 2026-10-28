@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupBubblePanel()
         setupShiftDrag()
         progressController = ProgressPanelController(model: jobList)
+        // PDF→Word 探测有子进程开销:启动时后台做一次,菜单只读缓存
+        Task.detached(priority: .utility) { PDFWordEngine.prime() }
 
         // 调试/验证钩子:KUMQUAT_PREVIEW_MENU=1 启动后 0.8s 用样例图弹出径向菜单
         if ProcessInfo.processInfo.environment["KUMQUAT_PREVIEW_MENU"] == "1" {
@@ -302,6 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case let .convertChannels(channels): verb = channels == 1 ? "转 Mono" : "转 双声道"
         case .audioWaveform: verb = "波形图"
         case let .redactVideo(rects): verb = "涂黑 \(rects.count) 处"
+        case .convertPDFWord: verb = "PDF → Word"
         case let .compressToSize(bytes): verb = String(format: "压缩至 %.1f MB", Double(bytes) / 1_048_576)
         }
         return "\(verb) · \(name)"

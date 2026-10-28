@@ -12,7 +12,7 @@
 
 **图片**(系统 sips / ImageIO,零依赖):JPG / PNG / HEIC / TIFF 互转、压缩、去 EXIF、旋转、翻转、缩放、灰度、多图拼贴、合成 PDF,以及内置编辑器(裁剪 / 涂黑 / 标注)
 
-**PDF**(PDFKit):合并、拆分、压缩、转图片、旋转
+**PDF**(PDFKit):合并、拆分、压缩、转图片、旋转;**转 Word**(需 [pdf2docx](https://github.com/dothinking/pdf2docx),版面重建)
 
 **视频 / 音频**(需自行安装 [ffmpeg](https://formulae.brew.sh/formula/ffmpeg)):MP4 / MOV / MKV / WebM / GIF 互转、抽音轨、变速、抽帧、剪短、涂黑;音频归一化、声道转换、波形图
 

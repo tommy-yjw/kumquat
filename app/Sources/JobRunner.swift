@@ -50,6 +50,9 @@ enum ActionKind {
     // 压缩到指定大小(选大小面板发起)
     case compressToSize(Int)        // 目标字节数:图片走质量二分,视频走码率换算
     case redactVideo([CGRect])      // 视频涂黑:归一化矩形,整段实色(drawbox 链)
+
+    // PDF → Word(仅检测到 python3+pdf2docx 才出现)
+    case convertPDFWord
 }
 
 struct JobOutcome {
@@ -388,6 +391,15 @@ final class JobRunner {
                 try await ProcessRunner.run(executablePath: ffmpeg.path,
                                             arguments: ["-y", "-i", file.path, "-vf", chain, output.path],
                                             timeout: 3600, cancel: cancel)
+                return JobOutcome(source: file, output: output)
+
+            case .convertPDFWord:
+                guard let python = PDFWordEngine.cachedPython else {
+                    return JobOutcome(source: file, output: nil, skipped: true)
+                }
+                let output = OutputNamer.uniqueOutput(for: file, suffix: nil, fileExtension: "docx")
+                try await PDFWordEngine.convert(python: python, input: file,
+                                                output: output, cancel: cancel)
                 return JobOutcome(source: file, output: output)
             }
         } catch {

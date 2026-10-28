@@ -254,6 +254,12 @@ enum ActionCatalog {
                 id: "pdf-to-png", title: "转为图片", systemImage: "photo.on.rectangle.angled",
                 accent: .red, files: pdfs, perform: { onRun(.pdfToPNG, pdfs) }
             ))
+            if PDFWordEngine.cachedReady {
+                primary.append(MenuAction(
+                    id: "convert-pdf-word", title: "转为 Word", systemImage: "doc.plaintext.fill",
+                    accent: .brown, files: pdfs, perform: { onRun(.convertPDFWord, pdfs) }
+                ))
+            }
             tools.append(contentsOf: [
                 MenuAction(id: "rotate-pdf-cw", title: "顺时针90°", systemImage: "rotate.right.fill",
                            accent: .red, files: pdfs, perform: { onRun(.rotatePDF(90), pdfs) }),

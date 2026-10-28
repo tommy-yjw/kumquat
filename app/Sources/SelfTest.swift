@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import CoreText
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -60,6 +61,10 @@ enum SelfTest {
 
             stage("Redact 三模式渲染(ImageComposer)")
             try testRedactRendering(root.appendingPathComponent("img"))
+
+            stage("PDF → Word(pdf2docx)")
+            PDFWordEngine.prime()
+            try await testPDFWord(root.appendingPathComponent("pdfword"))
         } catch {
             that(false, "测试执行异常:\(error.localizedDescription)")
             FileHandle.standardError.write(Data("💥 \(error)\n".utf8))
@@ -179,6 +184,43 @@ enum SelfTest {
             kind: .redactVideo([CGRect(x: 0.1, y: 0.1, width: 0.3, height: 0.3)]),
             files: [source])
         that(redacted.first?.succeeded == true, "视频:涂黑(drawbox)")
+    }
+
+    private static func testPDFWord(_ directory: URL) async throws {
+        guard let python = PDFWordEngine.cachedPython else {
+            FileHandle.standardError.write(Data("⏭️ pdf2docx 未安装,PDF→Word 跳过\n".utf8))
+            return
+        }
+        // 造一页带文字的 PDF(CoreText 画行)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let path = directory.appendingPathComponent("w.pdf")
+        var box = CGRect(x: 0, y: 0, width: 400, height: 300)
+        guard let consumer = CGDataConsumer(url: path as CFURL),
+              let context = CGContext(consumer: consumer, mediaBox: &box, nil) else {
+            throw NSError(domain: "Kumquat.SelfTest", code: 5,
+                          userInfo: [NSLocalizedDescriptionKey: "无法创建测试 PDF"])
+        }
+        context.beginPDFPage(nil)
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(box)
+        context.setFillColor(CGColor(gray: 0, alpha: 1))
+        let font = CTFontCreateWithName("Helvetica" as CFString, 24, nil)
+        if let attributed = CFAttributedStringCreate(nil, "Hello Kumquat" as CFString,
+                                                     [kCTFontAttributeName: font] as CFDictionary) {
+            context.textPosition = CGPoint(x: 40, y: 150)
+            CTLineDraw(CTLineCreateWithAttributedString(attributed), context)
+        }
+        context.endPDFPage()
+        context.closePDF()
+
+        let runner = JobRunner()
+        let outcomes = await runner.run(kind: .convertPDFWord, files: [path])
+        guard let output = outcomes.first?.output, outcomes.first?.succeeded == true else {
+            that(false, "PDF → Word:转换失败 \(outcomes.first?.errorText ?? "?")")
+            return
+        }
+        let head = (try? Data(contentsOf: output))?.prefix(2) ?? Data()
+        that(head == Data("PK".utf8), "PDF → Word:docx 为合法 OOXML(zip 头)")
     }
 
     private static func testCompressToSize(_ directory: URL) async throws {
