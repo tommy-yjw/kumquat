@@ -143,5 +143,15 @@ enum PDFWordEngine {
             arguments: ["-c",
                         "from pdf2docx import parse; parse(r'\(input.path)', r'\(output.path)')"],
             timeout: 1200, cancel: cancel)
+        // 后处理(随 bundle 分发):合并跨页表格碎片 + 按字号重建标题层级。
+        // 失败不影响主体结果(docx 已产出),故 try?。
+        if let resourceURL = Bundle.main.resourceURL {
+            let postfix = resourceURL.appendingPathComponent("pdf2docx_postfix.py")
+            if FileManager.default.fileExists(atPath: postfix.path) {
+                try? await ProcessRunner.run(executablePath: python.path,
+                                             arguments: [postfix.path, output.path],
+                                             timeout: 600, cancel: cancel)
+            }
+        }
     }
 }

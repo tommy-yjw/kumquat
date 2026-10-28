@@ -25,6 +25,7 @@ swiftc \
 echo "==> 写入 Info.plist 与资源"
 cp Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp Resources/pdf2docx_postfix.py "$APP/Contents/Resources/pdf2docx_postfix.py"
 
 # ad-hoc 签名:本地运行/通知中心需要合法 bundle;正式分发换成 Developer ID 证书再公证
 if command -v codesign >/dev/null 2>&1; then

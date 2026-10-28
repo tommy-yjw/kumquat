@@ -53,7 +53,7 @@ open build/Kumquat.app
 | 拆分 PDF | 每页一个 PDF("原名 页N.pdf") |
 | 压缩 PDF | 逐页位图化 150dpi 重写(**有损**,矢量文本会转位图;截图/扫描件压缩收益明显) |
 | 转为图片 | 每页 2× PNG |
-| 转为 Word | 经 python3 调用开源 [pdf2docx](https://github.com/dothinking/pdf2docx) 做版面重建(可选引擎,检测到才显示;安装:`pip3 install pdf2docx "pymupdf<1.23"`,PyMuPDF 需 <1.23) |
+| 转为 Word | 经 python3 调用开源 [pdf2docx](https://github.com/dothinking/pdf2docx) 做版面重建(可选引擎,检测到才显示;安装:`pip3 install pdf2docx "pymupdf<1.23"`,PyMuPDF 需 <1.23);转换后自动做两项修复:合并被分页切碎的表格碎片(去重复表头)、按字号重建 Heading 1/2/3 标题层级 |
 | 顺/逆时针 90°(工具轮盘) | `PDFPage.rotation` 重写 |
 
 **视频/音频(需 ffmpeg,未装自动隐藏;`brew install ffmpeg`)**
